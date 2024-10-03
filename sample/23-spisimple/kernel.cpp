@@ -19,10 +19,12 @@
 //
 #include "kernel.h"
 #include <circle/debug.h>
+#include <string.h>
 
 #define SPI_MASTER_DEVICE	0		// 0, 4, 5, 6 on Raspberry Pi 4; 0 otherwise
 
-#define SPI_CLOCK_SPEED		500000		// Hz
+#define SERIAL_BAUD     3000000
+#define SPI_CLOCK_SPEED	17000000		// Hz
 #define SPI_CPOL		0
 #define SPI_CPHA		0
 
@@ -60,7 +62,7 @@ boolean CKernel::Initialize (void)
 
 	if (bOK)
 	{
-		bOK = m_Serial.Initialize (115200);
+		bOK = m_Serial.Initialize (SERIAL_BAUD);
 	}
 
 	if (bOK)
@@ -96,28 +98,43 @@ TShutdownMode CKernel::Run (void)
 {
 	m_Logger.Write (FromKernel, LogNotice, "Compile time: " __DATE__ " " __TIME__);
 
-	m_Logger.Write (FromKernel, LogNotice, "Transfering %u bytes over SPI", TEST_DATA_LENGTH);
+	while (true) {
 
-	u8 TxData[TEST_DATA_LENGTH];
-	u8 RxBuffer[TEST_DATA_LENGTH];
-	for (unsigned i = 0; i < TEST_DATA_LENGTH; i++)
-	{
-		TxData[i] = (u8) i;
-		RxBuffer[i] = 0x55;
-	}
+		m_Timer.MsDelay(1000);
+		char rebootMagic[] = "tAgHQP3Lw2NZcW8Uru7jnf";
+		char serialBuf[100];
+		u32 serialBytes = m_Serial.Read(serialBuf, sizeof serialBuf);
+		if (serialBytes > 0) {
+			m_Logger.Write (FromKernel, LogNotice, "Data received");
+			m_Logger.Write (FromKernel, LogNotice, serialBuf);
+			if (strcmp(rebootMagic, serialBuf) == 0)
+				break;
+			m_Timer.MsDelay(4000);
+		}
 
-	if (m_SPIMaster.WriteRead (SPI_CHIP_SELECT, TxData, RxBuffer, TEST_DATA_LENGTH) != TEST_DATA_LENGTH)
-	{
-		CLogger::Get ()->Write (FromKernel, LogPanic, "SPI write error");
-	}
+		m_Logger.Write (FromKernel, LogNotice, "Transfering %u bytes over SPI", TEST_DATA_LENGTH);
 
-	CLogger::Get ()->Write (FromKernel, LogNotice, "%u bytes transfered", TEST_DATA_LENGTH);
+		u8 TxData[TEST_DATA_LENGTH];
+		u8 RxBuffer[TEST_DATA_LENGTH];
+		for (unsigned i = 0; i < TEST_DATA_LENGTH; i++)
+		{
+			TxData[i] = (u8) i;
+			RxBuffer[i] = 0x55;
+		}
+
+		if (m_SPIMaster.WriteRead (SPI_CHIP_SELECT, TxData, RxBuffer, TEST_DATA_LENGTH) != TEST_DATA_LENGTH)
+		{
+			CLogger::Get ()->Write (FromKernel, LogPanic, "SPI write error");
+		}
+
+		CLogger::Get ()->Write (FromKernel, LogNotice, "%u bytes transfered", TEST_DATA_LENGTH);
 
 #ifndef NDEBUG
-	CLogger::Get ()->Write (FromKernel, LogDebug, "Dumping received data:");
+		CLogger::Get ()->Write (FromKernel, LogDebug, "Dumping received data:");
 
-	debug_hexdump (RxBuffer, TEST_DATA_LENGTH, FromKernel);
+		debug_hexdump (RxBuffer, TEST_DATA_LENGTH, FromKernel);
 #endif
+	}
 
-	return ShutdownHalt;
+	return ShutdownReboot;
 }
