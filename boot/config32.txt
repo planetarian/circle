@@ -10,11 +10,17 @@
 #
 
 arm_64bit=0
+#kernel_address=0x80000 #64bit
 
 [pi4]
 kernel=kernel7l.img
 armstub=armstub7-rpi4.bin
 max_framebuffers=2
+arm_freq=1500
+gpu_freq=550
+over_voltage=4
+hdmi_enable_4kp60=1
+disable_splash=1
 
 [cm4]
 otg_mode=1
